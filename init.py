@@ -1,129 +1,61 @@
-import math
+class ImperaInterpreter:
+    def __init__(self):
+        self.memory = {}
 
-def tokenize(source_code: str) -> list[str]:
-    formatted_code = source_code.replace('(', ' ( ').replace(')', ' ) ')
-    return formatted_code.split()
-
-def parse(tokens: list[str]):
-    if not tokens:
-        raise SyntaxError("Erro Sintático: código finalizado inesperadamente.")
-
-    token = tokens.pop(0)
-
-    if token == '(':
-        sub_tree = []
-        while tokens and tokens[0] != ')':
-            sub_tree.append(parse(tokens))
+    def run(self, code_lines):
+        i = 0
+        lines = [line.strip() for line in code_lines if line.strip()]
         
-        if not tokens:
-            raise SyntaxError("Erro Sintático: esperava ')' mas o código acabou.")
+        while i < len(lines):
+            line = lines[i]
             
-        tokens.pop(0)
-        return sub_tree
-    elif token == ')':
-        raise SyntaxError("Erro Sintático: ')' inesperado.")
-    else:
-        return atomize(token)
+            # Comando var: var x = 10
+            if line.startswith("var "):
+                _, rest = line.split("var ", 1)
+                var_name, expr = rest.split("=")
+                self.memory[var_name.strip()] = eval(expr.strip(), {}, self.memory)
+            
+            # Comando set: set x = x + 1
+            elif line.startswith("set "):
+                _, rest = line.split("set ", 1)
+                var_name, expr = rest.split("=")
+                self.memory[var_name.strip()] = eval(expr.strip(), {}, self.memory)
+            
+            # Comando print: print x
+            elif line.startswith("print "):
+                var_name = line.split("print ", 1)[1].strip()
+                val = eval(var_name, {}, self.memory)
+                print(f"[SAÍDA]: {val}")
+            
+            # Estrutura while ... do ... end
+            elif line.startswith("while "):
+                cond_str = line[6:line.find(" do")].strip()
+                loop_body = []
+                j = i + 1
+                
+                # Coleta as linhas até o 'end' do while
+                while j < len(lines) and lines[j] != "end":
+                    loop_body.append(lines[j])
+                    j += 1
+                
+                # Executa o laço alterando o estado
+                while eval(cond_str, {}, self.memory):
+                    self.run(loop_body)
+                
+                i = j  # Salta para depois do 'end'
+                
+            i += 1
 
-def atomize(token: str):
-    try:
-        return int(token)
-    except ValueError:
-        try:
-            return float(token)
-        except ValueError:
-            return str(token)
-
-class Environment:
-    def __init__(self, bindings=None, outer=None):
-        self.bindings = bindings or {}
-        self.outer = outer
-
-    def find(self, var_name: str):
-        if var_name in self.bindings:
-            return self.bindings[var_name]
-        elif self.outer is not None:
-            return self.outer.find(var_name)
-        raise NameError(f"Erro de Execução: símbolo '{var_name}' não encontrado.")
-
-    def set(self, var_name: str, value):
-        self.bindings[var_name] = value
-        return value
-
-def create_global_env() -> Environment:
-    env = Environment()
-    env.set('+', lambda a, b: a + b)
-    env.set('-', lambda a, b: a - b)
-    env.set('*', lambda a, b: a * b)
-    env.set('/', lambda a, b: a / b)
-    env.set('>', lambda a, b: a > b)
-    env.set('<', lambda a, b: a < b)
-    env.set('==', lambda a, b: a == b)
-    env.set('pi', math.pi)
-    return env
-
-def evaluate(x, env: Environment):
-    if isinstance(x, str):
-        return env.find(x)
-    elif not isinstance(x, list):
-        return x
-
-    if not x:
-        return None
-
-    op = x[0]
-
-    if op == 'define':
-        _, symbol, exp = x
-        value = evaluate(exp, env)
-        return env.set(symbol, value)
-
-    elif op == 'if':
-        _, test, conseq, alt = x
-        cond_result = evaluate(test, env)
-        exp_to_eval = conseq if cond_result else alt
-        return evaluate(exp_to_eval, env)
-
-    elif op == 'lambda':
-        _, params, body = x
-        return lambda *args: evaluate(body, Environment(bindings=dict(zip(params, args)), outer=env))
-
-    else:
-        proc = evaluate(x[0], env)
-        args = [evaluate(arg, env) for arg in x[1:]]
-        return proc(*args)
-
-def run(code: str, env: Environment = None):
-    if env is None:
-        env = global_env
-        
-    tokens = tokenize(code)
-    results = []
+if __name__ == "__main__":
+    codigo = [
+        "var contador = 1",
+        "var soma = 0",
+        "while contador <= 4 do",
+        "set soma = soma + contador",
+        "set contador = contador + 1",
+        "end",
+        "print soma"
+    ]
     
-    while tokens:
-        ast = parse(tokens)
-        results.append(evaluate(ast, env))
-        
-    return results[-1] if results else None
-
-global_env = create_global_env()
-
-run("(define raio 5)", global_env)
-
-area = run("(* pi (* raio raio))", global_env)
-print(f"Área do círculo: {area}")
-
-run("(define dobro (lambda (x) (* x 2)))", global_env)
-
-resultado = run("(dobro 21)", global_env)
-print(f"Resultado do dobro: {resultado}")
-
-teste_if = run("(if (> raio 3) 100 0)", global_env)
-print(f"Resultado do condicional: {teste_if}")
-
-multi_script = """
-(define x 10)
-(define y 20)
-(+ x y)
-"""
-print(f"Resultado do script completo: {run(multi_script, global_env)}")
+    interpreter = ImperaInterpreter()
+    interpreter.run(codigo)
